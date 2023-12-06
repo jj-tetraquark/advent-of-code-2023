@@ -25,14 +25,12 @@ fn main() {
                 .filter_map(|x| x.parse::<u64>().ok())
                 .collect::<Vec<u64>>()
         });
-
         (data.next().unwrap(), data.next().unwrap())
     };
 
     let ways_to_win: Vec<u64> = zip(time, dist)
         .map(|(race_time, race_dist)| {
             let (upper, lower) = get_bounds(race_time, race_dist);
-            println!("{}, {}: {}", upper, lower, lower - upper + 1);
             lower - upper + 1
         })
         .collect();
@@ -49,7 +47,6 @@ fn main() {
                 .parse::<u64>()
                 .unwrap()
         });
-
         (data.next().unwrap(), data.next().unwrap())
     };
 
