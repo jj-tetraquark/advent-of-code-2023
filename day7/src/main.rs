@@ -1,45 +1,36 @@
+use std::cmp;
 use std::env;
 use std::fs;
-use std::mem;
 use std::iter::zip;
-use std::cmp;
 
-#[derive(Debug, PartialOrd)]
-enum Hand {
-    FiveOfAKind(String),
-    FourOfAKind(String),
-    FullHouse(String),
-    ThreeOfAKind(String),
-    TwoPair(String),
-    OnePair(String),
-    HighCard(String),
+#[derive(Debug, PartialOrd, PartialEq)]
+enum HandType {
+    FiveOfAKind,
+    FourOfAKind,
+    FullHouse,
+    ThreeOfAKind,
+    TwoPair,
+    OnePair,
+    HighCard,
 }
 
-impl PartialEq for Hand {
-    fn eq(&self, other: &Self) -> bool {
-        mem::discriminant(self) == mem::discriminant(other)
-    }
+#[derive(Debug)]
+struct Hand {
+    hand_type: HandType,
+    cards: String,
 }
 
 impl Hand {
-    fn cards(&self) -> &String {
-        match self {
-            Hand::FiveOfAKind(card)
-            | Hand::FourOfAKind(card)
-            | Hand::FullHouse(card)
-            | Hand::ThreeOfAKind(card)
-            | Hand::TwoPair(card)
-            | Hand::OnePair(card)
-            | Hand::HighCard(card) => card,
-        }
+    pub fn new(hand_type: HandType, cards: String) -> Self {
+        Hand { hand_type, cards }
     }
 
-    fn compare(&self, other :&Self, index: fn(char) -> usize) -> cmp::Ordering {
-        if self == other {
-            let cards_a = self.cards();
-            let cards_b = other.cards();
+    fn compare(&self, other: &Self, index: fn(char) -> usize) -> cmp::Ordering {
+        if self.hand_type == other.hand_type {
+            let cards_a = &self.cards;
+            let cards_b = &other.cards;
             for (card_a, card_b) in zip(cards_a.chars(), cards_b.chars()) {
-                if card_a == card_b { 
+                if card_a == card_b {
                     continue;
                 }
                 return index(card_a).cmp(&index(card_b));
@@ -47,7 +38,7 @@ impl Hand {
             panic!()
             //cmp::Ordering::Equal
         } else {
-            self.partial_cmp(&other).unwrap()
+            self.hand_type.partial_cmp(&other.hand_type).unwrap()
         }
     }
 }
@@ -75,7 +66,7 @@ fn card_index_with_jokers(card: char) -> usize {
     match card {
         'J' => 12,
         'A' | 'K' | 'Q' => card_index(card),
-        _ => card_index(card) - 1
+        _ => card_index(card) - 1,
     }
 }
 
@@ -83,7 +74,7 @@ fn get_card_counts(hand_str: &str, index: fn(char) -> usize) -> Vec<u32> {
     hand_str.chars().fold(vec![0; 13], |mut count, card| {
         let idx = index(card);
         count[idx] += 1;
-        return count;
+        count
     })
 }
 
@@ -92,21 +83,21 @@ fn get_hand(hand_str: &str) -> Hand {
 
     let hand_string = hand_str.to_string();
     if card_counts.contains(&5) {
-        return Hand::FiveOfAKind(hand_string);
+        return Hand::new(HandType::FiveOfAKind, hand_string);
     } else if card_counts.contains(&4) {
-        return Hand::FourOfAKind(hand_string);
+        return Hand::new(HandType::FourOfAKind, hand_string);
     } else if card_counts.contains(&3) {
         if card_counts.contains(&2) {
-            return Hand::FullHouse(hand_string);
+            return Hand::new(HandType::FullHouse, hand_string);
         }
-        return Hand::ThreeOfAKind(hand_string);
+        return Hand::new(HandType::ThreeOfAKind, hand_string);
     } else if card_counts.contains(&2) {
         if card_counts.iter().filter(|&c| c == &2).count() == 2 {
-            return Hand::TwoPair(hand_string);
+            return Hand::new(HandType::TwoPair, hand_string);
         }
-        return Hand::OnePair(hand_string);
+        return Hand::new(HandType::OnePair, hand_string);
     }
-    return Hand::HighCard(hand_string);
+    return Hand::new(HandType::HighCard, hand_string);
 }
 
 fn get_hand_with_jokers(hand_str: &str) -> Hand {
@@ -117,59 +108,64 @@ fn get_hand_with_jokers(hand_str: &str) -> Hand {
     let mut card_counts = get_card_counts(hand_str, card_index_with_jokers);
     let jokers = card_counts.pop().unwrap();
     let max_count = *card_counts.iter().max().unwrap();
-    let min_count = *card_counts.iter().min().unwrap();
 
     let hand_string = hand_str.to_string();
     if max_count + jokers == 5 {
-        return Hand::FiveOfAKind(hand_string); 
+        return Hand::new(HandType::FiveOfAKind, hand_string);
     } else if max_count + jokers == 4 {
-        return Hand::FourOfAKind(hand_string);
+        return Hand::new(HandType::FourOfAKind, hand_string);
     } else if max_count == 3 || max_count + jokers >= 3 {
         let jokers_remaining = jokers - (3 - max_count);
+        let min_count = *card_counts.iter().filter(|&x| x > &0).min().unwrap();
         if min_count == 2 || min_count + jokers_remaining == 2 {
-            return Hand::FullHouse(hand_string);
+            return Hand::new(HandType::FullHouse, hand_string);
         }
-        return Hand::ThreeOfAKind(hand_string);
+        return Hand::new(HandType::ThreeOfAKind, hand_string);
     } else if max_count == 2 && jokers == 1 {
-        return Hand::TwoPair(hand_string);
+        return Hand::new(HandType::TwoPair, hand_string);
     }
     assert_eq!(jokers, 1);
-    return Hand::OnePair(hand_string);
+    return Hand::new(HandType::OnePair, hand_string);
 }
 
 fn parse_input(fname: &str, parse_hand: fn(&str) -> Hand) -> Vec<(Hand, u32)> {
-    fs::read_to_string(&fname)
+    fs::read_to_string(fname)
         .expect("Could not read from file")
         .lines()
         .map(|line| {
             let mut round = line.split_whitespace();
             let hand = parse_hand(round.next().unwrap());
             let score = round.next().unwrap().parse::<u32>().unwrap();
-            return (hand, score);
+
+            (hand, score)
         })
         .collect()
 }
 
-fn main() {
-    
-
-    let fname = env::args().nth(1).expect("input expected as arg");
-
-    let mut hands: Vec<(Hand, u32)> = parse_input(&fname, get_hand_with_jokers);
+fn get_score(fname: &str, get_hand: fn(&str) -> Hand, card_index: fn(char) -> usize) -> u64 {
+    let mut hands: Vec<(Hand, u32)> = parse_input(fname, get_hand);
 
     hands.sort_by(|a, b| {
         let hand_a = &a.0;
         let hand_b = &b.0;
-        hand_a.compare(hand_b, card_index_with_jokers)
+        hand_a.compare(hand_b, card_index)
     });
 
-    for hand in hands.iter() {
-        println!("{:?}", hand);
-    }
+    hands
+        .iter()
+        .rev()
+        .enumerate()
+        .fold(0u64, |acc, (i, round)| {
+            acc + (i + 1) as u64 * round.1 as u64
+        })
+}
 
-    let winnings = hands.iter().rev().enumerate().fold(0u64, |acc, (i, round)| {
-        acc + (i + 1) as u64 * round.1 as u64
-    });
+fn main() {
+    let fname = env::args().nth(1).expect("input expected as arg");
 
+    let winnings = get_score(&fname, get_hand, card_index);
     println!("winnings: {}", winnings);
+
+    let winnings_with_jokers = get_score(&fname, get_hand_with_jokers, card_index_with_jokers);
+    println!("winnings with jokers: {}", winnings_with_jokers);
 }
