@@ -27,16 +27,12 @@ impl Hand {
 
     fn compare(&self, other: &Self, index: fn(char) -> usize) -> cmp::Ordering {
         if self.hand_type == other.hand_type {
-            let cards_a = &self.cards;
-            let cards_b = &other.cards;
-            for (card_a, card_b) in zip(cards_a.chars(), cards_b.chars()) {
-                if card_a == card_b {
-                    continue;
+            for (card_a, card_b) in zip(self.cards.chars(), other.cards.chars()) {
+                if card_a != card_b {
+                    return index(card_a).cmp(&index(card_b));
                 }
-                return index(card_a).cmp(&index(card_b));
             }
-            panic!()
-            //cmp::Ordering::Equal
+            cmp::Ordering::Equal
         } else {
             self.hand_type.partial_cmp(&other.hand_type).unwrap()
         }
@@ -71,11 +67,9 @@ fn card_index_with_jokers(card: char) -> usize {
 }
 
 fn get_card_counts(hand_str: &str, index: fn(char) -> usize) -> Vec<u32> {
-    hand_str.chars().fold(vec![0; 13], |mut count, card| {
-        let idx = index(card);
-        count[idx] += 1;
-        count
-    })
+    let mut count = vec![0; 13];
+    hand_str.chars().for_each(|card| count[index(card)] += 1);
+    count
 }
 
 fn get_hand(hand_str: &str) -> Hand {
@@ -108,8 +102,8 @@ fn get_hand_with_jokers(hand_str: &str) -> Hand {
     let mut card_counts = get_card_counts(hand_str, card_index_with_jokers);
     let jokers = card_counts.pop().unwrap();
     let max_count = *card_counts.iter().max().unwrap();
-
     let hand_string = hand_str.to_string();
+
     if max_count + jokers == 5 {
         return Hand::new(HandType::FiveOfAKind, hand_string);
     } else if max_count + jokers == 4 {
@@ -124,7 +118,6 @@ fn get_hand_with_jokers(hand_str: &str) -> Hand {
     } else if max_count == 2 && jokers == 1 {
         return Hand::new(HandType::TwoPair, hand_string);
     }
-    assert_eq!(jokers, 1);
     return Hand::new(HandType::OnePair, hand_string);
 }
 
@@ -142,22 +135,16 @@ fn parse_input(fname: &str, parse_hand: fn(&str) -> Hand) -> Vec<(Hand, u32)> {
         .collect()
 }
 
-fn get_score(fname: &str, get_hand: fn(&str) -> Hand, card_index: fn(char) -> usize) -> u64 {
+fn get_score(fname: &str, get_hand: fn(&str) -> Hand, card_index: fn(char) -> usize) -> u32 {
     let mut hands: Vec<(Hand, u32)> = parse_input(fname, get_hand);
 
-    hands.sort_by(|a, b| {
-        let hand_a = &a.0;
-        let hand_b = &b.0;
-        hand_a.compare(hand_b, card_index)
-    });
+    hands.sort_by(|hand_a, hand_b| hand_a.0.compare(&hand_b.0, card_index));
 
     hands
         .iter()
         .rev()
         .enumerate()
-        .fold(0u64, |acc, (i, round)| {
-            acc + (i + 1) as u64 * round.1 as u64
-        })
+        .fold(0u32, |acc, (i, hand)| acc + (i + 1) as u32 * hand.1)
 }
 
 fn main() {
